@@ -781,6 +781,8 @@ namespace Voron.Impl
 
         public string CallerName { get; set; }
 
+        internal bool AppliedJournalStateAfterFlush { get; set; }
+
         public void Dispose()
         {
             if (IsDisposed)

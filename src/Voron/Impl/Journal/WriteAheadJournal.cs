@@ -523,7 +523,6 @@ namespace Voron.Impl.Journal
             private LastFlushState _lastFlushed = new LastFlushState(0, 0, null, null);
             private long _totalWrittenButUnsyncedBytes;
             private bool _ignoreLockAlreadyTaken;
-            private long _transactionThatUpdatedFlush;
             private Action<LowLevelTransaction> _updateJournalStateAfterFlush;
             private DateTime _lastFlushTime;
             private DateTime _lastSyncTime;
@@ -552,7 +551,7 @@ namespace Voron.Impl.Journal
             {
                 // we are getting the transaction here just to verify that the write lock is held
                 Debug.Assert(tx.Flags is TransactionFlags.ReadWrite);
-                if (tx.Committed && _transactionThatUpdatedFlush == tx.Id)
+                if (tx.Committed && tx.AppliedJournalStateAfterFlush)
                 {
                     _updateJournalStateAfterFlush = null;
                 }
@@ -744,7 +743,7 @@ namespace Voron.Impl.Journal
                     {
                         try
                         {
-                            _transactionThatUpdatedFlush = txw.Id;
+                            txw.AppliedJournalStateAfterFlush = true;
                             txw.UpdateDataPagerState(dataPagerState);
                             UpdateJournalStateUnderWriteTransactionLock(txw, bufferOfPageFromScratchBuffersToFree, record);
 
