@@ -772,7 +772,12 @@ namespace Voron.Impl.Journal
             private void WaitForJournalStateToBeUpdated(CancellationToken token, TransactionPersistentContext transactionPersistentContext,
                 Action<LowLevelTransaction> currentAction, ByteStringContext byteStringContext)
             {
+                _forTestingPurposes?.OnWaitForJournalStateToBeUpdated_BeforeAssigning_updateJournalStateAfterFlush?.Invoke();
+
                 Interlocked.Exchange(ref _updateJournalStateAfterFlush, currentAction);
+
+                _forTestingPurposes?.OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush?.Invoke();
+
                 do
                 {
                     LowLevelTransaction txw = null;
@@ -972,6 +977,9 @@ namespace Voron.Impl.Journal
 
                 internal Action OnApplyLogsToDataFileUnderFlushingLock;
 
+                internal Action OnWaitForJournalStateToBeUpdated_BeforeAssigning_updateJournalStateAfterFlush;
+
+                internal Action OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush;
             }
 
             // This can take a LONG time, and it needs to run concurrently with the

@@ -874,7 +874,9 @@ namespace Voron
                 GlobalFlushingBehavior.GlobalFlusher.Value.MaybeFlushEnvironment(this);
             }
 
-                
+#if DEBUG
+            _forTestingPurposes?.OnWriteTransactionCompleted?.Invoke(tx);
+#endif
             // this must occur when we are holding the transaction lock
             Journal.Applicator.OnTransactionCompleted(tx);
 
@@ -1625,6 +1627,7 @@ namespace Voron
         internal sealed class TestingStuff
         {
             internal Action ActionToCallDuringFullBackupRighAfterCopyHeaders;
+            public Action<LowLevelTransaction> OnWriteTransactionCompleted { get; set; }
         }
 
 

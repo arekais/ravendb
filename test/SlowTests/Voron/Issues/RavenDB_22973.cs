@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Linq;
+using System.Threading;
 using FastTests.Voron;
 using Tests.Infrastructure;
 using Voron;
 using Voron.Global;
+using Voron.Impl;
 using Voron.Impl.Scratch;
 using Xunit;
 using Xunit.Abstractions;
@@ -285,5 +287,104 @@ public class RavenDB_22973 : StorageTest
 
             Assert.Equal(shrinkedPageInScratch.PositionInScratchBuffer, overflowScratchPage.PositionInScratchBuffer);
         }
+    }
+
+    [RavenFact(RavenTestCategory.Voron)]
+    public void Must_not_omit_UpdateJournalStateUnderWriteTransactionLock_during_flush()
+    {
+        using (var txw1 = Env.WriteTransaction())
+        {
+            txw1.LowLevelTransaction.AllocatePage(1);
+
+            txw1.Commit();
+        }
+
+        using (var txw2 = Env.WriteTransaction())
+        {
+            txw2.LowLevelTransaction.AllocatePage(1);
+
+            txw2.Commit();
+        }
+
+        using (var txr = Env.ReadTransaction())
+            Env.FlushLogToDataFile(); // flush and free scratch pages up to txw1
+
+        Transaction writeTransactionExecutedDuringWaitForJournalStateToBeUpdated = null;
+
+        Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_BeforeAssigning_updateJournalStateAfterFlush += () =>
+        {
+            writeTransactionExecutedDuringWaitForJournalStateToBeUpdated = Env.WriteTransaction();
+
+            writeTransactionExecutedDuringWaitForJournalStateToBeUpdated.Commit();
+        };
+
+        Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush += () =>
+        {
+            writeTransactionExecutedDuringWaitForJournalStateToBeUpdated.Dispose();
+        };
+
+        Env.FlushLogToDataFile(); // flush and free scratch pages up to txw2
+
+        using (var txw3 = Env.WriteTransaction())
+        {
+            txw3.LowLevelTransaction.AllocatePage(1);
+
+            txw3.Commit();
+        }
+
+        Env.FlushLogToDataFile(); // next flush will detect unreleased scratch pages via AssertNoPagesAllocatedInTransactionOlderThan() - only in DEBUG
+    }
+
+    [RavenFact(RavenTestCategory.Voron)]
+    public void Must_not_omit_UpdateJournalStateUnderWriteTransactionLock_during_flush_2()
+    {
+        using (var txw1 = Env.WriteTransaction())
+        {
+            txw1.LowLevelTransaction.AllocatePage(1);
+
+            txw1.Commit();
+        }
+
+        Env.FlushLogToDataFile();
+
+        var txw = Env.WriteTransaction();
+        txw.LowLevelTransaction.AllocatePage(1);
+
+        txw.Commit();
+
+        var mre = new ManualResetEvent(false);
+
+        Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush += () =>
+        {
+            mre.Set();
+        };
+
+        Env.ForTestingPurposesOnly().OnWriteTransactionCompleted += tx =>
+        {
+            if (tx == txw.LowLevelTransaction)
+            {
+                var t = new Thread(() =>
+                {
+                    Env.FlushLogToDataFile();
+                });
+                t.Start();
+
+                mre.WaitOne();
+            }
+        };
+
+        txw.Dispose();
+
+        Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush = null;
+        Env.ForTestingPurposesOnly().OnWriteTransactionCompleted = null;
+
+        using (var txw2 = Env.WriteTransaction())
+        {
+            txw2.LowLevelTransaction.AllocatePage(1);
+
+            txw2.Commit();
+        }
+
+        Env.FlushLogToDataFile(); // next flush will detect unreleased scratch pages via AssertNoPagesAllocatedInTransactionOlderThan() - only in DEBUG
     }
 }
