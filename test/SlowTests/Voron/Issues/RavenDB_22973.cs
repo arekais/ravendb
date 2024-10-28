@@ -380,7 +380,11 @@ public class RavenDB_22973 : StorageTest
         Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush = null;
         Env.ForTestingPurposesOnly().OnWriteTransactionCompleted = null;
 
-        t.Join();
+        if (t != null)
+        {
+            // OnWriteTransactionCompleted is executed only in DEBUG so t might be null in Release
+            t.Join();
+        }
 
         using (var txw2 = Env.WriteTransaction())
         {

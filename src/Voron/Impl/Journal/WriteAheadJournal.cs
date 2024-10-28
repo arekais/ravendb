@@ -739,9 +739,9 @@ namespace Voron.Impl.Journal
                     ExceptionDispatchInfo edi = null;
                     var sp = Stopwatch.StartNew();
 
-                    var appliedSuccessfully = false;
+                    var executedSuccessfully = false;
 
-                    WaitForJournalStateToBeUpdated(token, transactionPersistentContext, txw =>
+                    var applied = WaitForJournalStateToBeUpdated(token, transactionPersistentContext, txw =>
                     {
                         try
                         {
@@ -749,7 +749,7 @@ namespace Voron.Impl.Journal
                             txw.UpdateDataPagerState(dataPagerState);
                             UpdateJournalStateUnderWriteTransactionLock(txw, bufferOfPageFromScratchBuffersToFree, record);
 
-                            appliedSuccessfully = true;
+                            executedSuccessfully = true;
 
                             if (_waj._logger.IsDebugEnabled)
                                 _waj._logger.Debug($"Updated journal state under write tx lock (txId: {txw.Id}) after waiting for {sp.Elapsed}");
@@ -766,7 +766,7 @@ namespace Voron.Impl.Journal
 
                     if (edi != null)
                         edi.Throw();
-                    else if (appliedSuccessfully == false)
+                    else if (applied && executedSuccessfully == false)
                         throw new InvalidOperationException($"Journal state was not applied successfully after the flush (waited - {sp.Elapsed}, last flushed tx: id - {record.TransactionId}, written to journal - {record.WrittenToJournalNumber})");
                 }
                 finally
@@ -775,7 +775,7 @@ namespace Voron.Impl.Journal
                 }
             }
 
-            private void WaitForJournalStateToBeUpdated(CancellationToken token, TransactionPersistentContext transactionPersistentContext,
+            private bool WaitForJournalStateToBeUpdated(CancellationToken token, TransactionPersistentContext transactionPersistentContext,
                 Action<LowLevelTransaction> currentAction, ByteStringContext byteStringContext)
             {
                 _forTestingPurposes?.OnWaitForJournalStateToBeUpdated_BeforeAssigning_updateJournalStateAfterFlush?.Invoke();
@@ -796,7 +796,7 @@ namespace Voron.Impl.Journal
                         }
                         catch (OperationCanceledException)
                         {
-                            return; // we disposed the server
+                            return false; // we disposed the server
                         }
                         catch (TimeoutException)
                         {
@@ -824,7 +824,7 @@ namespace Voron.Impl.Journal
 
                                 case 1:
                                     // cancellation token
-                                    return;
+                                    return false;
 
                                 case WaitHandle.WaitTimeout:
                                     // timeout
@@ -844,6 +844,8 @@ namespace Voron.Impl.Journal
                     }
                     // if it was changed, this means that we are done - note that it could be applied by the commit of another write transaction
                 } while (currentAction == _updateJournalStateAfterFlush);
+
+                return true;
             }
 
             private void UpdateJournalStateUnderWriteTransactionLock(LowLevelTransaction txw,
