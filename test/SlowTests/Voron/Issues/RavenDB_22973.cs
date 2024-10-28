@@ -359,11 +359,13 @@ public class RavenDB_22973 : StorageTest
             mre.Set();
         };
 
+        Thread t = null;
+
         Env.ForTestingPurposesOnly().OnWriteTransactionCompleted += tx =>
         {
             if (tx == txw.LowLevelTransaction)
             {
-                var t = new Thread(() =>
+                t = new Thread(() =>
                 {
                     Env.FlushLogToDataFile();
                 });
@@ -377,6 +379,8 @@ public class RavenDB_22973 : StorageTest
 
         Env.Journal.Applicator.ForTestingPurposesOnly().OnWaitForJournalStateToBeUpdated_AfterAssigning_updateJournalStateAfterFlush = null;
         Env.ForTestingPurposesOnly().OnWriteTransactionCompleted = null;
+
+        t.Join();
 
         using (var txw2 = Env.WriteTransaction())
         {
