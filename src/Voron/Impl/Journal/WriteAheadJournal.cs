@@ -739,6 +739,8 @@ namespace Voron.Impl.Journal
                     ExceptionDispatchInfo edi = null;
                     var sp = Stopwatch.StartNew();
 
+                    var appliedSuccessfully = false;
+
                     WaitForJournalStateToBeUpdated(token, transactionPersistentContext, txw =>
                     {
                         try
@@ -746,6 +748,8 @@ namespace Voron.Impl.Journal
                             txw.AppliedJournalStateAfterFlush = true;
                             txw.UpdateDataPagerState(dataPagerState);
                             UpdateJournalStateUnderWriteTransactionLock(txw, bufferOfPageFromScratchBuffersToFree, record);
+
+                            appliedSuccessfully = true;
 
                             if (_waj._logger.IsDebugEnabled)
                                 _waj._logger.Debug($"Updated journal state under write tx lock (txId: {txw.Id}) after waiting for {sp.Elapsed}");
@@ -760,7 +764,10 @@ namespace Voron.Impl.Journal
                         }
                     }, byteStringContext);
 
-                    edi?.Throw();
+                    if (edi != null)
+                        edi.Throw();
+                    else if (appliedSuccessfully == false)
+                        throw new InvalidOperationException($"Journal state was not applied successfully after the flush (waited - {sp.Elapsed}, last flushed tx: id - {record.TransactionId}, written to journal - {record.WrittenToJournalNumber})");
                 }
                 finally
                 {
@@ -835,7 +842,7 @@ namespace Voron.Impl.Journal
                     {
                         txw?.Dispose();
                     }
-                    // if it was changed, this means that we are done
+                    // if it was changed, this means that we are done - note that it could be applied by the commit of another write transaction
                 } while (currentAction == _updateJournalStateAfterFlush);
             }
 
