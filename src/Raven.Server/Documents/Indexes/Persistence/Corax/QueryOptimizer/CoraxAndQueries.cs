@@ -45,44 +45,6 @@ public sealed class CoraxAndQueries : CoraxBooleanQueryBase
         var stack = CollectionsMarshal.AsSpan(_queryStack);
         var noStreaming = new CoraxQueryBuilder.StreamingOptimization();
 
-        if (ShouldPerformScan(stack, out var queryPosition))
-        {
-            MultiUnaryItem[] listOfMergedUnaries = new MultiUnaryItem[stack.Length - 1];
-            int unaryPos = 0;
-            for (var it = 0; it < stack.Length; it++)
-            {
-                if (it == queryPosition)
-                    continue;
-
-                var query = stack[it];
-                if (query.Operation is UnaryMatchOperation.Between)
-                {
-                    listOfMergedUnaries[unaryPos] = (query.Term, query.Term2) switch
-                    {
-                        (long l, long l2) => new MultiUnaryItem(query.Field, l, l2, query.BetweenLeft, query.BetweenRight),
-                        (double d, double d2) => new MultiUnaryItem(query.Field, d, d2, query.BetweenLeft, query.BetweenRight),
-                        (string s, string s2) => new MultiUnaryItem(IndexSearcher, query.Field, s, s2, query.BetweenLeft, query.BetweenRight),
-                        (long l, double d) => new MultiUnaryItem(query.Field, Convert.ToDouble(l), d, query.BetweenLeft, query.BetweenRight),
-                        (double d, long l) => new MultiUnaryItem(query.Field, d, Convert.ToDouble(l), query.BetweenLeft, query.BetweenRight),
-                        _ => throw new InvalidOperationException($"UnaryMatchOperation {query.Operation} is not supported for type {query.Term.GetType()}")
-                    };
-                }
-                else
-                {
-                    listOfMergedUnaries[unaryPos] = query.Term switch
-                    {
-                        long longTerm => new MultiUnaryItem(query.Field, longTerm, query.Operation),
-                        double doubleTerm => new MultiUnaryItem(query.Field, doubleTerm, query.Operation),
-                        _ => new MultiUnaryItem(IndexSearcher, query.Field, query.Term as string, query.Operation),
-                    };
-                }
-
-                unaryPos++;
-            }
-
-            return IndexSearcher.CreateMultiUnaryMatch(stack[queryPosition].Materialize(ref noStreaming), listOfMergedUnaries);
-        }
-
         IQueryMatch match = null;
         stack.Sort(PrioritizeSort);
         //stack.Reverse(); // we want to have BIGGEST at the very beginning to avoid filling big match multiple times
@@ -94,28 +56,6 @@ public sealed class CoraxAndQueries : CoraxBooleanQueryBase
             match = match is null
                 ? materializedQuery
                 : IndexSearcher.And(materializedQuery, match);
-        }
-
-
-        bool ShouldPerformScan(Span<CoraxBooleanItem> queries, out int pos)
-        {
-            pos = -1;
-            if (IsBoosting)
-                return false;
-            
-            var minimumCount = long.MaxValue;
-            for (int idX = 0; idX < queries.Length; ++idX)
-            {
-                ref var query = ref queries[idX];
-                if (query.Operation is UnaryMatchOperation.Equals && query.Count < minimumCount)
-                {
-                    pos = idX;
-                    minimumCount = query.Count;
-                }
-            }
-
-
-            return minimumCount < 32 * 1024; // 32K items seems ok
         }
 
         return IsBoosting ? IndexSearcher.Boost(match, Boosting.Value) : match;
