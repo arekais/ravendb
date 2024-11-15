@@ -217,8 +217,9 @@ namespace SlowTests.Voron.Issues
 
                 var state = tx.LowLevelTransaction.PagerTransactionState.ForCrypto![scratchFile.Pager];
 
-                Assert.True(state[66].SkipOnTxCommit); // page 66 is PositionInScratchBuffer of the age #21 that was freed at the beginning of this transaction
-                Assert.True(state[83].SkipOnTxCommit); // page 83 is PositionInScratchBuffer of the age #20 that was freed in this transaction
+                // page 66 is PositionInScratchBuffer of the page #21 that was freed at the beginning of this transaction,
+                // and it was reused by page #20 that was freed in this transaction later on
+                Assert.True(state[66].SkipOnTxCommit);
 
                 tx.Commit();
             }
@@ -278,8 +279,9 @@ namespace SlowTests.Voron.Issues
 
                 var state = tx.LowLevelTransaction.PagerTransactionState.ForCrypto![scratchFile.Pager];
 
-                Assert.True(state[66].SkipOnTxCommit); // page 66 is PositionInScratchBuffer of the age #21 that was freed at the beginning of this transaction
-                Assert.True(state[83].SkipOnTxCommit); // page 83 is PositionInScratchBuffer of the age #20 that was freed in this transaction
+                // page 66 is PositionInScratchBuffer of the page #21 that was freed at the beginning of this transaction,
+                // and it was reused by page #20 that was freed in this transaction later on
+                Assert.True(state[66].SkipOnTxCommit);
 
                 tx.Commit();
             }

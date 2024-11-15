@@ -218,6 +218,15 @@ namespace Voron.Impl.Scratch
             }
         }
 
+        public void FreeImmediately(LowLevelTransaction tx, int scratchNumber, long page)
+        {
+            var scratch = _scratchBuffers[scratchNumber];
+            if (scratch.File.Free(tx, asOfTxId: -1, page))
+            {
+                MaybeRecycleFile(tx, scratch);
+            }
+        }
+
         private void MaybeRecycleFile(LowLevelTransaction tx, ScratchBufferItem scratch)
         {
             List<ScratchBufferFile> recycledScratchesToDispose = null;

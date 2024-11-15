@@ -846,7 +846,7 @@ namespace Voron.Impl
             {
                 _transactionPages.Remove(scratchPage);
 
-                _env.ScratchBufferPool.Free(this, scratchPage.File.Number, scratchPage.PositionInScratchBuffer);
+                _env.ScratchBufferPool.FreeImmediately(this, scratchPage.File.Number, scratchPage.PositionInScratchBuffer);
 
                 if (_env.Options.Encryption.IsEnabled)
                 {
@@ -1215,7 +1215,7 @@ namespace Voron.Impl
                 if(maybeRollBack.AllocatedInTransaction != Id)
                     continue; // from a committed transaction, can keep
                 
-                _env.ScratchBufferPool.Free(this, maybeRollBack.File.Number, maybeRollBack.PositionInScratchBuffer);
+                _env.ScratchBufferPool.FreeImmediately(this, maybeRollBack.File.Number, maybeRollBack.PositionInScratchBuffer);
             }
 
             RolledBack = true;
