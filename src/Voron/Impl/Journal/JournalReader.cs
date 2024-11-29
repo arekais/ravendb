@@ -21,7 +21,7 @@ using Sparrow.Json;
 
 namespace Voron.Impl.Journal
 {
-    public sealed unsafe class JournalReader : IDisposable
+    public sealed unsafe class JournalReader
     {
         private readonly StorageEnvironment _environment;
         private readonly Pager _journalPager;
@@ -754,10 +754,6 @@ namespace Voron.Impl.Journal
         public override string ToString()
         {
             return _journalPager.ToString();
-        }
-
-        public void Dispose()
-        {
         }
 
         public void Complete(ref Pager.State state, ref Pager.PagerTransactionState txState)

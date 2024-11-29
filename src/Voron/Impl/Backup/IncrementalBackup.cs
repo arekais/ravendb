@@ -364,11 +364,13 @@ namespace Voron.Impl.Backup
                                     env.Options.InitialFileSize ?? env.Options.InitialLogFileSize,
                                     env.Options.Encryption.IsEnabled);
                             toDispose.Add(recoveryPager);
-                            
-                            using (var reader = new JournalReader(env, journalPager, journalPagerState, txw.DataPager, recoveryPager, new HashSet<long>(),
-                                       new JournalInfo { LastSyncedTransactionId = lastTxId }, new FileHeader { HeaderRevision = -1 }, lastTxHeader))
+
+                            var reader = new JournalReader(env, journalPager, journalPagerState, txw.DataPager, recoveryPager, new HashSet<long>(),
+                                new JournalInfo { LastSyncedTransactionId = lastTxId }, new FileHeader { HeaderRevision = -1 }, lastTxHeader);
+                            try
                             {
-                                while (reader.ReadOneTransactionToDataFile(ref txw.DataPagerState, ref recoverPagerState, ref txw.PagerTransactionState,fileHandle, env.Options))
+                                while (reader.ReadOneTransactionToDataFile(ref txw.DataPagerState, ref recoverPagerState, ref txw.PagerTransactionState, fileHandle,
+                                           env.Options))
                                 {
                                     lastTxHeader = reader.LastTransactionHeader;
                                 }
@@ -381,7 +383,10 @@ namespace Voron.Impl.Backup
                                     lastTxId = lastTxHeader->TransactionId;
                                 }
                             }
-
+                            finally
+                            {
+                                reader.Complete(ref txw.DataPagerState, ref txw.PagerTransactionState);
+                            }
                             break;
 
                         default:

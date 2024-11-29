@@ -209,7 +209,10 @@ namespace Voron.Impl.Journal
 
                     Pager.PagerTransactionState txState = default;
                     var transactionHeader = txHeader->TransactionId == 0 ? null : txHeader;
-                    using (var journalReader = new JournalReader(_env, journalPager, journalPagerState, dataPager, recoveryPager, modifiedPages, logInfo, currentFileHeader, transactionHeader))
+
+                    var journalReader = new JournalReader(_env, journalPager, journalPagerState, dataPager, recoveryPager, modifiedPages, logInfo, currentFileHeader,
+                        transactionHeader);
+                    try
                     {
                         var transactionHeaders = journalReader.RecoverAndValidate(ref dataPagerState, ref recoveryPagerState, ref txState, _env.Options);
 
@@ -250,14 +253,17 @@ namespace Voron.Impl.Journal
 
                         lastProcessedJournal = journalNumber;
 
-                        journalReader.Complete(ref dataPagerState, ref txState);
-
                         if (journalReader.RequireHeaderUpdate) //this should prevent further load of transactions
                         {
                             requireHeaderUpdate = true;
                             break;
                         }
                     }
+                    finally
+                    {
+                        journalReader.Complete(ref dataPagerState, ref txState);
+                    }
+
                     addToInitLog?.Invoke(LogLevel.Debug, $"Journal {journalNumber:#,#;;0} Recovered");
 
                     _env.UpdateDataPagerState(dataPagerState);
