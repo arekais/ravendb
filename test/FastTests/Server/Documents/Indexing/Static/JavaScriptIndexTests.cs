@@ -122,7 +122,7 @@ namespace FastTests.Server.Documents.Indexing.Static
                     await session.SaveChangesAsync();
                 }
 
-                await Indexes.WaitForIndexingAsync(store);
+                await Indexes.WaitForIndexingAsync(store, allowErrors: allowStringCompilation == false);
 
                 if (allowStringCompilation)
                 {
@@ -138,8 +138,16 @@ namespace FastTests.Server.Documents.Indexing.Static
                 }
                 else
                 {
-                    var indexErrors = store.Maintenance.Send(new GetIndexErrorsOperation([index.IndexName], "A"));
-                    Assert.Equal(1, indexErrors.Length);
+                    IndexErrors[] indexErrors = null;
+
+                    WaitForValue(() =>
+                    {
+                        indexErrors = store.Maintenance.Send(new GetIndexErrorsOperation([index.IndexName], "A"));
+                        Assert.Equal(1, indexErrors.Length);
+
+                        return indexErrors[0].Errors.Length;
+                    }, 1);
+
                     Assert.Contains("String compilation has been disabled in engine options. You can configure it by modifying the configuration option: 'Indexing.AllowStringCompilation'",
                         indexErrors[0].Errors.First().Error);
                 }
