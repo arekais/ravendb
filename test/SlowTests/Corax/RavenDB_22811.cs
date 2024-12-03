@@ -1,8 +1,11 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
+using System.Threading;
 using FastTests;
 using Orders;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Operations.Indexes;
+using Raven.Client.Exceptions;
 using Raven.Server.Config;
 using Raven.Server.Config.Categories;
 using Tests.Infrastructure;
@@ -62,9 +65,28 @@ public class RavenDB_22811 : RavenTestBase
 
             Indexes.WaitForIndexing(store);
 
-            // ensure no index errors
-            var indexErrors = store.Maintenance.Send(new GetIndexErrorsOperation([coraxIndex.IndexName]));
+            var retry = 3;
 
+            // ensure no index errors
+            IndexErrors[] indexErrors = null;
+
+            do
+            {
+                try
+                {
+                    indexErrors = store.Maintenance.Send(new GetIndexErrorsOperation([coraxIndex.IndexName]));
+                    break;
+                }
+                catch (RavenException e) when (e.InnerException is OperationCanceledException)
+                {
+                    // it might happen occasionally during index replacement
+
+                    Thread.Sleep(500);
+                }
+
+            } while (retry-- > 0);
+
+            Assert.NotNull(indexErrors);
             Assert.Empty(indexErrors.SelectMany(x => x.Errors));
 
             // update document
