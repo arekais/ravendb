@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using FastTests;
@@ -51,20 +52,15 @@ public class RavenDB_22534 : RavenTestBase
             store.Maintenance.ForDatabase(restoredDb).Send(new ResetIndexOperation(index.IndexName, indexResetMode: IndexResetMode.InPlace));
             store.Maintenance.ForDatabase(restoredDb).Send(new ResetIndexOperation("Auto/Dtos/ByDtoInner", indexResetMode: IndexResetMode.InPlace));
             Indexes.WaitForIndexing(store, databaseName: restoredDb, allowErrors: true);
-            indexErrors = store.Maintenance.ForDatabase(restoredDb).Send(new GetIndexErrorsOperation([index.IndexName, "Auto/Dtos/ByDtoInner"]));
-            try
-            {
-                Assert.Equal(3, indexErrors[0].Errors.Length);
-            }
-            catch (Exception e)
-            {
-                WaitForUserToContinueTheTest(store, database: restoredDb);
 
-                Console.WriteLine(e);
-                throw;
-            }
-            Assert.Contains("https://ravendb.net/l/OB9XW4/", indexErrors[0].Errors[0].Error);
-            Assert.Equal(0, indexErrors[1].Errors.Length);
+            var staticIndexErrors = Indexes.WaitForIndexingErrors(store, restoredDb, [index.IndexName], errorsShouldExists: true);
+
+            Assert.Equal(3, staticIndexErrors[0].Errors.Length);
+            Assert.Contains("https://ravendb.net/l/OB9XW4/", staticIndexErrors[0].Errors[0].Error);
+
+            var autoIndexErrors = store.Maintenance.ForDatabase(restoredDb).Send(new GetIndexErrorsOperation(["Auto/Dtos/ByDtoInner"]));
+            
+            Assert.Equal(0, autoIndexErrors[0].Errors.Length);
 
             // force skipping indexing of complex fields
             index = new Index(complexFieldIndexingBehavior: IndexingConfiguration.CoraxComplexFieldIndexingBehavior.Skip);
@@ -72,8 +68,8 @@ public class RavenDB_22534 : RavenTestBase
 
             Indexes.WaitForIndexing(store, databaseName: restoredDb, allowErrors: true); // errors come from current static index, while we're replacing it by the one that won't have any errors
 
-            indexErrors = store.Maintenance.ForDatabase(restoredDb).Send(new GetIndexErrorsOperation([index.IndexName]));
-            Assert.Equal(0, indexErrors[0].Errors.Length);
+            staticIndexErrors = store.Maintenance.ForDatabase(restoredDb).Send(new GetIndexErrorsOperation([index.IndexName]));
+            Assert.Equal(0, staticIndexErrors[0].Errors.Length);
 
         }
         void ExtractFile(string path)

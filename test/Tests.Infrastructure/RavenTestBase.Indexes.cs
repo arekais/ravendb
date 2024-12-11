@@ -215,9 +215,13 @@ public partial class RavenTestBase
             }
         }
 
-        public IndexErrors[] WaitForIndexingErrors(IDocumentStore store, string[] indexNames = null, TimeSpan? timeout = null, string nodeTag = null, bool? errorsShouldExists = null)
+        public IndexErrors[] WaitForIndexingErrors(IDocumentStore store, string[] indexNames = null, TimeSpan? timeout = null, string nodeTag = null,
+            bool? errorsShouldExists = null)
         {
-            var databaseName = store.Database;
+            return WaitForIndexingErrors(store, store.Database, indexNames, timeout, nodeTag, errorsShouldExists);
+        }
+        public IndexErrors[] WaitForIndexingErrors(IDocumentStore store, string databaseName, string[] indexNames = null, TimeSpan? timeout = null, string nodeTag = null, bool? errorsShouldExists = null)
+        {
             var admin = store.Maintenance.ForDatabase(databaseName);
             var databaseRecord = admin.Server.Send(new GetDatabaseRecordOperation(databaseName));
 
@@ -279,7 +283,7 @@ public partial class RavenTestBase
                     }
                     else
                     {
-                        var indexes = store.Maintenance.Send(new GetIndexErrorsOperation(indexNames, nodeTag));
+                        var indexes = store.Maintenance.ForDatabase(databaseName).Send(new GetIndexErrorsOperation(indexNames, nodeTag));
                         foreach (var index in indexes)
                         {
                             if (index.Errors.Length > 0)
