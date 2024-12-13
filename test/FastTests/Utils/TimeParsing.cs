@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using FastTests.Voron.FixedSize;
 using Sparrow;
 using Sparrow.Json;
+using Tests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -151,7 +154,133 @@ namespace FastTests.Utils
             }
         }
 
+        [RavenTheory(RavenTestCategory.Core)]
+        [InlineData("2024-12-13T02:38:42.786481Z")] // 27
+        [InlineData("2024-12-13T02:38:42.7864811")] // 27
+        [InlineData("2024-12-13T02:38:42.78648Z")] //26
+        [InlineData("2024-12-13T02:38:42.786488")] //26
+        [InlineData("2024-12-13T02:38:42.7864Z")] //25
+        [InlineData("2024-12-13T02:38:42.78644")] //25
+        [InlineData("2024-12-13T02:38:42.786Z")] // 24
+        [InlineData("2024-12-13T02:38:42.7868")] // 24
+        [InlineData("2024-12-13T02:38:42.78Z")] //23
+        [InlineData("2024-12-13T02:38:42.788")] //23
+        [InlineData("2024-12-13T02:38:42.7Z")] // 22
+        [InlineData("2024-12-13T02:38:42.77")] // 22
+        [InlineData("2024-12-13T02:38:42.7")] // 21
+        [InlineData("2024-12-13T02:38:42Z")]
+        public void CanParseValidDatesWithTrailingZerosInMillisecondsPart(string dt)
+        {
+            var expected = DateTime.ParseExact(dt, DefaultFormat.DateTimeFormatsToRead, CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
 
+            var bytes = Encoding.UTF8.GetBytes(dt);
+            fixed (byte* buffer = bytes)
+            {
+                Assert.Equal(LazyStringParser.Result.DateTime,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true));
 
+                Assert.Equal(expected.Kind, time.Kind);
+                Assert.Equal(expected, time);
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.Core)]
+        [InlineData("2024-12-13T02:38:42.7864810Z")]
+        [InlineData("2024-12-13T02:38:42.7864800Z")]
+        [InlineData("2024-12-13T02:38:42.7864000Z")]
+        [InlineData("2024-12-13T02:38:42.7860000Z")]
+        [InlineData("2024-12-13T02:38:42.7800000Z")]
+        [InlineData("2024-12-13T02:38:42.7000000Z")]
+        [InlineData("2024-12-13T02:38:42.0000000Z")]
+        public void CanParseValidUtcDatesWithTrailingZerosInMillisecondsPart_DifferentFormats(string dt)
+        {
+            var expected = DateTime.ParseExact(dt, DefaultFormat.DateTimeFormatsToRead, CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
+
+            var formatsToRead = new Dictionary<string, DateTimeKind>
+            {
+                {DefaultFormat.DateTimeFormatsToRead[0], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[3], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[5], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[6], DateTimeKind.Utc},
+            };
+
+            foreach (var dateTimeFormat in formatsToRead)
+            {
+                string tested = expected.ToString(dateTimeFormat.Key);
+
+                var expectedAfterFormatting = DateTime.ParseExact(tested, DefaultFormat.DateTimeFormatsToRead, CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind);
+
+                var bytes = Encoding.UTF8.GetBytes(tested);
+                fixed (byte* buffer = bytes)
+                {
+                    Assert.Equal(LazyStringParser.Result.DateTime,
+                        LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true));
+                    Assert.Equal(expectedAfterFormatting, time);
+                }
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.Core)]
+        [InlineDataWithRandomSeed]
+        public void CanParseValidRandomDate(int seed)
+        {
+            var r = new Random(seed);
+
+            var dt = GetRandomDate(r);
+
+            var formatsToRead = new Dictionary<string, DateTimeKind>
+            {
+                {DefaultFormat.DateTimeFormatsToRead[0], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[1], DateTimeKind.Unspecified},
+                {DefaultFormat.DateTimeFormatsToRead[2], DateTimeKind.Local},
+                {DefaultFormat.DateTimeFormatsToRead[3], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[4], DateTimeKind.Unspecified},
+                {DefaultFormat.DateTimeFormatsToRead[5], DateTimeKind.Utc},
+                {DefaultFormat.DateTimeFormatsToRead[6], DateTimeKind.Utc},
+            };
+            
+            Assert.Equal(formatsToRead.Count, DefaultFormat.DateTimeFormatsToRead.Length);
+
+            foreach (var dateTimeFormat in formatsToRead)
+            {
+                string tested = dt.ToString(dateTimeFormat.Key);
+
+                var bytes = Encoding.UTF8.GetBytes(tested);
+                fixed (byte* buffer = bytes)
+                {
+                    var parseResult = LazyStringParser.TryParseDateTime(buffer, bytes.Length, out var dateTime, out var dateTimeOffset, properlyParseThreeDigitsMilliseconds: true);
+                    
+                    Assert.True(parseResult != LazyStringParser.Result.Failed, $"parseResult: {parseResult}, tested value: {tested}");
+
+                    switch (parseResult)
+                    {
+                        case LazyStringParser.Result.DateTime:
+
+                            Assert.Equal(tested, dateTime.ToString(dateTimeFormat.Key));
+                            break;
+                        case LazyStringParser.Result.DateTimeOffset:
+
+                            Assert.Equal(tested, dateTimeOffset.ToString(dateTimeFormat.Key));
+                            break;
+                    }
+                }
+            }
+        }
+
+        private static DateTime GetRandomDate(Random random, int minYear = 1900, int maxYear = 2099)
+        {
+            var year = random.Next(minYear, maxYear);
+            var month = random.Next(1, 12);
+            var noOfDaysInMonth = DateTime.DaysInMonth(year, month);
+            var day = random.Next(1, noOfDaysInMonth);
+
+            DateTime randomDate = new DateTime(year, month, day);
+
+            randomDate = randomDate.AddMilliseconds(random.Next(0, 9999999));
+            return randomDate;
+        }
     }
 }
