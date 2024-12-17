@@ -546,7 +546,7 @@ namespace Sparrow.Json
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Result TryParseDateTime(char* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds, bool properlyParseTrailingZeros = true)
+        public static Result TryParseDateTime(char* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds)
         {
             // PERF: We want this part of the code to be embedded into the caller code instead. 
             if (len < 19 || len > 33)
@@ -555,7 +555,7 @@ namespace Sparrow.Json
             if (buffer[4] != '-' || buffer[7] != '-' || buffer[10] != 'T' ||
                 buffer[13] != ':' || buffer[16] != ':' || buffer[16] != ':')
             {
-                if (properlyParseTrailingZeros == false || len != 29 || buffer[3] != ',' || buffer[19] != ':' || buffer[22] != ':')
+                if (len != 29 || buffer[3] != ',' || buffer[19] != ':' || buffer[22] != ':')
                     goto Failed;
 
                 // ddd, dd MMM yyyy HH':'mm':'ss 'GMT' - "r" format specifier
@@ -572,7 +572,7 @@ namespace Sparrow.Json
                 }
             }
 
-            return TryParseDateTimeInternal(buffer, len, out dt, out dto, properlyParseThreeDigitsMilliseconds, properlyParseTrailingZeros);
+            return TryParseDateTimeInternal(buffer, len, out dt, out dto, properlyParseThreeDigitsMilliseconds);
 
             Failed:
             dt = default(DateTime);
@@ -580,7 +580,7 @@ namespace Sparrow.Json
             return Result.Failed;
         }
 
-        public static Result TryParseDateTimeInternal(char* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds, bool properlyParseTrailingZeros)
+        public static Result TryParseDateTimeInternal(char* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds)
         {
             if (TryParseNumber4(buffer, 0, out int year) == false)
                 goto Failed;
@@ -621,9 +621,6 @@ namespace Sparrow.Json
                         goto case 23;
                     }
 
-                    if (properlyParseTrailingZeros == false)
-                        goto Failed;
-
                     if (buffer[19] != '.')
                         goto Failed;
                     if (TryParseNumber4(buffer, 20, out fractions) == false)
@@ -634,9 +631,6 @@ namespace Sparrow.Json
                 case 23: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffZ",
                     if (buffer[22] == 'Z')
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         kind = DateTimeKind.Utc;
                         goto case 22;
                     }
@@ -650,9 +644,6 @@ namespace Sparrow.Json
                 case 25: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'+'dd':'dd'" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffffZ"
                     if (buffer[22] != ':' || (buffer[19] != '+' && buffer[19] != '-'))
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         if (buffer[24] == 'Z')
                         {
                             kind = DateTimeKind.Utc;
@@ -688,9 +679,6 @@ namespace Sparrow.Json
                 case 27: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss.ffffffZ"
                     if (buffer[26] == 'Z')
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         kind = DateTimeKind.Utc;
                         goto case 26;
                     }
@@ -720,9 +708,6 @@ namespace Sparrow.Json
                     result = Result.DateTimeOffset;
                     goto Finished;
                 case 22: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fZ",
-                    if (properlyParseTrailingZeros == false)
-                        break;
-
                     if (buffer[21] == 'Z')
                     {
                         kind = DateTimeKind.Utc;
@@ -735,8 +720,6 @@ namespace Sparrow.Json
                     fractions *= 100000;
                     goto Finished_DT;
                 case 21: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'f",
-                    if (properlyParseTrailingZeros == false)
-                        break;
                     if (buffer[19] != '.')
                         goto Failed;
                     if (TryParseNumber(buffer + 20, 1, out fractions) == false)
@@ -744,8 +727,6 @@ namespace Sparrow.Json
                     fractions *= 1000000;
                     goto Finished_DT;
                 case 26: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss.ffffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffZ"
-                    if (properlyParseTrailingZeros == false)
-                        break;
                     if (buffer[25] == 'Z')
                     {
                         kind = DateTimeKind.Utc;
@@ -775,7 +756,7 @@ namespace Sparrow.Json
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Result TryParseDateTime(byte* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds, bool properlyParseTrailingZeros = true)
+        public static Result TryParseDateTime(byte* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds)
 
         {
             // PERF: We want this part of the code to be embedded into the caller code instead. 
@@ -785,7 +766,7 @@ namespace Sparrow.Json
             if (buffer[4] != '-' || buffer[7] != '-' || buffer[10] != 'T' ||
                 buffer[13] != ':' || buffer[16] != ':' || buffer[16] != ':')
             {
-                if (properlyParseTrailingZeros == false || len != 29 || buffer[3] != ',' || buffer[19] != ':' || buffer[22] != ':')
+                if (len != 29 || buffer[3] != ',' || buffer[19] != ':' || buffer[22] != ':')
                     goto Failed;
 
                 // ddd, dd MMM yyyy HH':'mm':'ss 'GMT' - "r" format specifier
@@ -796,7 +777,7 @@ namespace Sparrow.Json
                 }
             }
 
-            return TryParseDateTimeInternal(buffer, len, out dt, out dto, properlyParseThreeDigitsMilliseconds, properlyParseTrailingZeros);
+            return TryParseDateTimeInternal(buffer, len, out dt, out dto, properlyParseThreeDigitsMilliseconds);
 
             Failed:
             dt = default(DateTime);
@@ -804,7 +785,7 @@ namespace Sparrow.Json
             return Result.Failed;
         }
 
-        private static Result TryParseDateTimeInternal(byte* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds, bool properlyParseTrailingZeros)
+        private static Result TryParseDateTimeInternal(byte* buffer, int len, out DateTime dt, out DateTimeOffset dto, bool properlyParseThreeDigitsMilliseconds)
         {
             if (TryParseNumber4(buffer, 0, out int year) == false)
                 goto Failed;
@@ -845,9 +826,6 @@ namespace Sparrow.Json
                         goto case 23;
                     }
 
-                    if (properlyParseTrailingZeros == false)
-                        goto Failed;
-                    
                     if (buffer[19] != '.')
                         goto Failed;
                     if (TryParseNumber4(buffer, 20, out fractions) == false)
@@ -858,9 +836,6 @@ namespace Sparrow.Json
                 case 23: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffZ",
                     if (buffer[22] == 'Z')
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         kind = DateTimeKind.Utc;
                         goto case 22;
                     }
@@ -874,9 +849,6 @@ namespace Sparrow.Json
                 case 25: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'+'dd':'dd'" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffffZ"
                     if (buffer[22] != ':' || (buffer[19] != '+' && buffer[19] != '-'))
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         if (buffer[24] == 'Z')
                         {
                             kind = DateTimeKind.Utc;
@@ -912,9 +884,6 @@ namespace Sparrow.Json
                 case 27: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss.ffffffZ"
                     if (buffer[26] == 'Z')
                     {
-                        if (properlyParseTrailingZeros == false)
-                            goto Failed;
-
                         kind = DateTimeKind.Utc;
                         goto case 26;
                     }
@@ -944,9 +913,6 @@ namespace Sparrow.Json
                     result = Result.DateTimeOffset;
                     goto Finished;
                 case 22: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fZ",
-                    if (properlyParseTrailingZeros == false)
-                        break;
-
                     if (buffer[21] == 'Z')
                     {
                         kind = DateTimeKind.Utc;
@@ -959,8 +925,6 @@ namespace Sparrow.Json
                     fractions *= 100000;
                     goto Finished_DT;
                 case 21: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'f",
-                    if (properlyParseTrailingZeros == false)
-                        break;
                     if (buffer[19] != '.')
                         goto Failed;
                     if (TryParseNumber(buffer + 20, 1, out fractions) == false)
@@ -968,8 +932,6 @@ namespace Sparrow.Json
                     fractions *= 1000000;
                     goto Finished_DT;
                 case 26: //"yyyy'-'MM'-'dd'T'HH':'mm':'ss.ffffff" OR "yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffZ"
-                    if (properlyParseTrailingZeros == false)
-                        break;
                     if (buffer[25] == 'Z')
                     {
                         kind = DateTimeKind.Utc;
