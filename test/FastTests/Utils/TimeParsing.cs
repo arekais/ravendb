@@ -183,6 +183,15 @@ namespace FastTests.Utils
                 Assert.Equal(expected.Kind, time.Kind);
                 Assert.Equal(expected, time);
             }
+
+            fixed (char* buffer = dt)
+            {
+                Assert.Equal(LazyStringParser.Result.DateTime,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true));
+
+                Assert.Equal(expected.Kind, time.Kind);
+                Assert.Equal(expected, time);
+            }
         }
 
         [RavenTheory(RavenTestCategory.Core)]
@@ -215,6 +224,13 @@ namespace FastTests.Utils
 
                 var bytes = Encoding.UTF8.GetBytes(tested);
                 fixed (byte* buffer = bytes)
+                {
+                    Assert.Equal(LazyStringParser.Result.DateTime,
+                        LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true));
+                    Assert.Equal(expectedAfterFormatting, time);
+                }
+
+                fixed (char* buffer = tested)
                 {
                     Assert.Equal(LazyStringParser.Result.DateTime,
                         LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true));
@@ -267,6 +283,25 @@ namespace FastTests.Utils
                             break;
                     }
                 }
+
+                fixed (char* buffer = tested)
+                {
+                    var parseResult = LazyStringParser.TryParseDateTime(buffer, bytes.Length, out var dateTime, out var dateTimeOffset, properlyParseThreeDigitsMilliseconds: true);
+
+                    Assert.True(parseResult != LazyStringParser.Result.Failed, $"parseResult: {parseResult}, tested value: {tested}");
+
+                    switch (parseResult)
+                    {
+                        case LazyStringParser.Result.DateTime:
+
+                            Assert.Equal(tested, dateTime.ToString(dateTimeFormat.Key));
+                            break;
+                        case LazyStringParser.Result.DateTimeOffset:
+
+                            Assert.Equal(tested, dateTimeOffset.ToString(dateTimeFormat.Key));
+                            break;
+                    }
+                }
             }
         }
 
@@ -281,6 +316,61 @@ namespace FastTests.Utils
 
             randomDate = randomDate.AddMilliseconds(random.Next(0, 9999999));
             return randomDate;
+        }
+
+        [RavenTheory(RavenTestCategory.Core)]
+        [InlineData("2024-12-13T02:38:42.786481Z")]
+        [InlineData("2024-12-13T02:38:42.7864Z")]
+        [InlineData("2024-12-13T02:38:42.78644")]
+        [InlineData("2024-12-13T02:38:42.7868")]
+        [InlineData("2024-12-13T02:38:42.78Z")]
+        public void FailsToParseValidDatesFormattedWithFSpecifier_BackwardCompatibility(string dt)
+        {
+            const bool doNotParseTrailingZeros = false;
+
+            var bytes = Encoding.UTF8.GetBytes(dt);
+            fixed (byte* buffer = bytes)
+            {
+                Assert.Equal(LazyStringParser.Result.Failed,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true, properlyParseTrailingZeros: doNotParseTrailingZeros));
+            }
+
+            fixed (char* buffer = dt)
+            {
+                Assert.Equal(LazyStringParser.Result.Failed,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true, properlyParseTrailingZeros: doNotParseTrailingZeros));
+            }
+        }
+
+        [RavenTheory(RavenTestCategory.Core)]
+        [InlineData("2024-12-13T02:38:42.786488")]
+        [InlineData("2024-12-13T02:38:42.78648Z")]
+        [InlineData("2024-12-13T02:38:42.7Z")]
+        [InlineData("2024-12-13T02:38:42.77")]
+        [InlineData("2024-12-13T02:38:42.7")]
+        public void ManagesToParseValidDatesFormattedWithFSpecifier_ButParsedValuesArentCorrect_BackwardCompatibility(string dt)
+        {
+            const bool doNotParseTrailingZeros = false;
+
+            var expected = DateTime.ParseExact(dt, DefaultFormat.DateTimeFormatsToRead, CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind);
+
+            var bytes = Encoding.UTF8.GetBytes(dt);
+            fixed (byte* buffer = bytes)
+            {
+                Assert.Equal(LazyStringParser.Result.DateTime,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true, properlyParseTrailingZeros: doNotParseTrailingZeros));
+
+                Assert.NotEqual(expected, time);
+            }
+
+            fixed (char* buffer = dt)
+            {
+                Assert.Equal(LazyStringParser.Result.DateTime,
+                    LazyStringParser.TryParseDateTime(buffer, bytes.Length, out DateTime time, out _, properlyParseThreeDigitsMilliseconds: true, properlyParseTrailingZeros: doNotParseTrailingZeros));
+
+                Assert.NotEqual(expected, time);
+            }
         }
     }
 }
